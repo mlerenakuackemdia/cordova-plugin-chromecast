@@ -4,7 +4,7 @@
         id="cordova-plugin-chromecast"
         version="2.0.1">
   <engines>
-    <engine name="cordova" version=">=4.0.0"/>
+    <engine name="cordova" version=">=3.4.0" />
   </engines>
 
   <name>Cordova ChromeCast</name>
