@@ -30,13 +30,13 @@ public final class CastOptionsProvider implements OptionsProvider {
     public CastOptions getCastOptions(Context context) {
         // Example showing 4 buttons: "rewind", "play/pause", "forward" and "stop casting".
         List<String> buttonActions = new ArrayList<>();
-        buttonActions.add(MediaIntentReceiver.ACTION_PREVIOUS);
+        buttonActions.add(MediaIntentReceiver.ACTION_SKIP_PREV);
         buttonActions.add(MediaIntentReceiver.ACTION_TOGGLE_PLAYBACK);
-        buttonActions.add(MediaIntentReceiver.Action_NEXT);
+        buttonActions.add(MediaIntentReceiver.ACTION_SKIP_NEXT);
         buttonActions.add(MediaIntentReceiver.ACTION_STOP_CASTING);
 
 // Showing "play/pause" and "stop casting" in the compat view of the notification.
-        int[] compatButtonActionsIndices = new int[]{1, 3};
+        int[] compatButtonActionsIndices = new int[]{0, 1, 2, 3};
 
         // Builds a notification with the above actions. Each tap on the "rewind" and "forward" buttons skips 30 seconds.
 // Tapping on the notification opens an Activity with class VideoBrowserActivity.
