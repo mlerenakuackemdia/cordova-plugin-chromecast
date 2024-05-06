@@ -43,6 +43,7 @@ public final class CastOptionsProvider implements OptionsProvider {
         NotificationOptions notificationOptions = new NotificationOptions.Builder()
                 .setActions(buttonActions, compatButtonActionsIndices)
                 .setTargetActivityClassName(context.getPackageName() + ".MainActivity")
+                .setMediaSessionEnabled(false)
                 .build();
 
         CastMediaOptions mediaOptions = new CastMediaOptions.Builder()

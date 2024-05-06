@@ -656,6 +656,47 @@ public class ChromecastSession {
     }
 
     /**
+     * Insert Items in the queue
+     * @oaram JSONArray
+     * @param insertBeforeItemId int or null
+     * @param customData JSONObject or null
+     */
+    public void queueInsertItems(JSONArray queueItems, int insertBeforeItemId, JSONObject customData ,CallbackContext callback) {
+        if (client == null || session == null) {
+            callback.error("session_error");
+            return;
+        }
+        activity.runOnUiThread(new Runnable() {
+            public void run() {
+                try {
+                    JSONArray qItems = queueItems;
+                    MediaQueueItem[] items = new MediaQueueItem[qItems.length()];
+                    for (int i = 0; i < qItems.length(); i++) {
+                        items[i] = ChromecastUtilities.createMediaQueueItem(qItems.getJSONObject(i));
+                    }
+
+                    setQueueReloadCallback(new Runnable() {
+                        @Override
+                        public void run() {
+                            callback.success(createMediaObject());
+                        }
+                    });
+                    client.queueInsertItems(items, insertBeforeItemId, customData).setResultCallback(new ResultCallback<MediaChannelResult>() {
+                        @Override
+                        public void onResult(@NonNull MediaChannelResult result) {
+                            if (!result.getStatus().isSuccess()) {
+                                callback.error("session_error");
+                                setQueueReloadCallback(null);
+                            }
+                        }
+                    });
+                } catch (JSONException e) {
+                    callback.error(ChromecastUtilities.createError("invalid_parameter", e.getMessage()));
+                }
+            }
+        });
+    }
+    /**
      * Plays the item with itemId in the queue.
      * @param itemId The ID of the item to jump to.
      * @param callback called with .success or .error depending on the result

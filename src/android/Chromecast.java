@@ -408,6 +408,16 @@ public final class Chromecast extends CordovaPlugin {
     }
 
     /**
+     * Insert Items in the queue
+     * @oaram JSONArray
+     * @param insertBeforeItemId int or null
+     * @param customData JSONObject or null
+     */
+    public boolean queueInsertItems(JSONArray queueItems, int insertBeforeItemId, JSONObject customData, final CallbackContext callbackContext) {
+        this.media.queueInsertItems(queueItems, insertBeforeItemId, customData, callbackContext);
+        return true;
+    }
+    /**
      * Plays the item with itemId in the queue.
      * @param itemId The ID of the item to jump to.
      * @param callbackContext called with .success or .error depending on the result
