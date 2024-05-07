@@ -661,7 +661,7 @@ public class ChromecastSession {
      * @param insertBeforeItemId int or null
      * @param customData JSONObject or null
      */
-    public void queueInsertItems(JSONArray queueItems, int insertBeforeItemId, JSONObject customData ,CallbackContext callback) {
+    public void queueInsertItems(JSONArray queueInsertItemsRequest, CallbackContext callback) {
         if (client == null || session == null) {
             callback.error("session_error");
             return;
@@ -669,24 +669,20 @@ public class ChromecastSession {
         activity.runOnUiThread(new Runnable() {
             public void run() {
                 try {
-                    JSONArray qItems = queueItems;
+                    JSONArray qItems = queueInsertItemsRequest.getJSONArray("items");;
                     MediaQueueItem[] items = new MediaQueueItem[qItems.length()];
                     for (int i = 0; i < qItems.length(); i++) {
                         items[i] = ChromecastUtilities.createMediaQueueItem(qItems.getJSONObject(i));
                     }
-
-                    setQueueReloadCallback(new Runnable() {
-                        @Override
-                        public void run() {
-                            callback.success(createMediaObject());
-                        }
-                    });
-                    client.queueInsertItems(items, insertBeforeItemId, customData).setResultCallback(new ResultCallback<MediaChannelResult>() {
+                    JSONObject customData = null;
+                    int insertBeforeItemId = queueInsertItemsRequest.getInt("insertBeforeItemId");
+                    queueInsertItems(items, insertBeforeItemId, customData).setResultCallback(new ResultCallback<MediaChannelResult>() {
                         @Override
                         public void onResult(@NonNull MediaChannelResult result) {
                             if (!result.getStatus().isSuccess()) {
-                                callback.error("session_error");
-                                setQueueReloadCallback(null);
+                                callback.error("queueInsertItems error");
+                            } else {
+                                callback.success();
                             }
                         }
                     });

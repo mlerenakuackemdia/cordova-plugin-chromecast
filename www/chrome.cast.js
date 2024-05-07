@@ -363,6 +363,25 @@ chrome.cast = {
         },
 
         /**
+         * A request to insert a new list of media items into the queue.
+         *  @property {chrome.cast.media.QueueItem[]} items The list of media items to insert.
+         *  @property {number} insertBeforeItemId The ID of the item that the new items should be inserted before.
+         *  @property {Object} customData Custom data for the receiver application.
+         */
+        QueueInsertItemsRequest: function QueueInsertItemsRequest (items, insertBeforeItemId, customData) {
+            this.type = 'QUEUE_INSERT';
+            this.items = items;
+            this.insertBeforeItemId = undefined;
+            if (insertBeforeItemId) {
+                this.insertBeforeItemId = insertBeforeItemId;
+            }
+            this.customData = null;
+            if (customData) {
+                this.customData = customData;
+            }
+        },
+
+        /**
          * An audiobook chapter description.
          * @property {string}                             bookTitle     Audiobook title.
          * @property {number}                             chapterNumber Chapter number, used for display purposes.
@@ -774,17 +793,19 @@ chrome.cast.Session.prototype.queueLoad = function (loadRequest, successCallback
 };
 
 /**
+ * Inserts a new list of media items into the queue.
+ * @param  {chrome.cast.media.QueueInsertItemsRequest} queueInsertItemsRequest
  *
  */
-chrome.cast.Session.prototype.queueInsertItems = function (items, insertBeforeItemId, customData, successCallback, errorCallback) {
+chrome.cast.Session.prototype.queueInsertItems = function (queueInsertItemsRequest, successCallback, errorCallback) {
     if (this._preCheck(errorCallback)) { return; }
-    if (!items || items.length === 0) {
+    if (!queueInsertItemsRequest.items || queueInsertItemsRequest.items.length === 0) {
         return errorCallback && errorCallback(new chrome.cast.Error(
           chrome.cast.ErrorCode.SESSION_ERROR, 'INVALID_PARAMS',
           { reason: 'INVALID_PARAMS', type: 'INVALID_REQUEST' }));
     }
     var self = this;
-    execute('queueInsertItems', items, insertBeforeItemId, customData, function (err, obj) {
+    execute('queueInsertItems', queueInsertItemsRequest, function (err, obj) {
         if (!err) {
             successCallback(true);
             // Also trigger the update notification
