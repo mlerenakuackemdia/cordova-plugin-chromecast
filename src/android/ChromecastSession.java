@@ -672,7 +672,11 @@ public class ChromecastSession {
                     for (int i = 0; i < qItems.length(); i++) {
                         items[i] = ChromecastUtilities.createMediaQueueItem(qItems.getJSONObject(i));
                     }
-                    JSONObject customData = null;
+                   JSONObject customData = null;
+                   try {
+                       customData = queueLoadRequest.getJSONObject("customData");
+                   } catch (JSONException e) {
+                   }
                     int insertBeforeItemId = queueInsertItemsRequest.getInt("insertBeforeItemId");
                     client.queueInsertItems(items, insertBeforeItemId, customData).setResultCallback(new
                     ResultCallback<MediaChannelResult>() {
