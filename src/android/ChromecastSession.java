@@ -657,11 +657,9 @@ public class ChromecastSession {
 
     /**
      * Insert Items in the queue
-     * @oaram JSONArray
-     * @param insertBeforeItemId int or null
-     * @param customData JSONObject or null
+     * @param JSONObject queueInsertItemsRequest
      */
-    public void queueInsertItems(JSONArray queueInsertItemsRequest, CallbackContext callback) {
+    public void queueInsertItems(JSONObject queueInsertItemsRequest, CallbackContext callback) {
         if (client == null || session == null) {
             callback.error("session_error");
             return;
