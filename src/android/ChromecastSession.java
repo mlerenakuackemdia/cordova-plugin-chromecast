@@ -674,7 +674,8 @@ public class ChromecastSession {
                     }
                     JSONObject customData = null;
                     int insertBeforeItemId = queueInsertItemsRequest.getInt("insertBeforeItemId");
-                    queueInsertItems(items, insertBeforeItemId, customData).setResultCallback(new ResultCallback<MediaChannelResult>() {
+                    client.queueInsertItems(items, insertBeforeItemId, customData).setResultCallback(new
+                    ResultCallback<MediaChannelResult>() {
                         @Override
                         public void onResult(@NonNull MediaChannelResult result) {
                             if (!result.getStatus().isSuccess()) {

@@ -371,7 +371,7 @@ chrome.cast = {
         QueueInsertItemsRequest: function QueueInsertItemsRequest (items, insertBeforeItemId, customData) {
             this.type = 'QUEUE_INSERT';
             this.items = items;
-            this.insertBeforeItemId = undefined;
+            this.insertBeforeItemId = 0;
             if (insertBeforeItemId) {
                 this.insertBeforeItemId = insertBeforeItemId;
             }
