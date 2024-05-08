@@ -510,17 +510,17 @@ chrome.cast = {
             SMALL_CAPITALS: 'SMALL_CAPITALS'
         },
 
-        /**
-         * Possible text track font style.
-         */
+         /**
+          * Possible text track font style.
+          */
         TextTrackFontStyle: {NORMAL: 'NORMAL', BOLD: 'BOLD', BOLD_ITALIC: 'BOLD_ITALIC', ITALIC: 'ITALIC'},
 
-        /**
-         * Possible text track window types.
-         */
+         /**
+          * Possible text track window types.
+          */
         TextTrackWindowType: {NONE: 'NONE', NORMAL: 'NORMAL', ROUNDED_CORNERS: 'ROUNDED_CORNERS'},
 
-        /**
+         /**
          * Describes style information for a text track.
          *
          * Colors are represented as strings "#RRGGBBAA" where XX are the two hexadecimal symbols that represent
@@ -529,12 +529,12 @@ chrome.cast = {
          */
         TextTrackStyle: function TextTrackStyle () {
             this.backgroundColor = this.customData = this.edgeColor = this.edgeType =
-              this.fontFamily = this.fontGenericFamily = this.fontScale = this.fontStyle =
-                this.foregroundColor = this.windowColor = this.windowRoundedCornerRadius =
-                  this.windowType = null;
+            this.fontFamily = this.fontGenericFamily = this.fontScale = this.fontStyle =
+            this.foregroundColor = this.windowColor = this.windowRoundedCornerRadius =
+            this.windowType = null;
         },
 
-        /**
+         /**
          * A request to modify the text tracks style or change the tracks status. If a trackId does not match
          * the existing trackIds the whole request will fail and no status will change. It is acceptable to
          * change the text track style even if no text track is currently active.
@@ -625,11 +625,11 @@ chrome.cast.Session.prototype = Object.create(EventEmitter.prototype);
 function sessionPreCheck (sessionId) {
     if (!_session || _session.status !== chrome.cast.SessionStatus.CONNECTED) {
         return new chrome.cast.Error(
-          chrome.cast.ErrorCode.INVALID_PARAMETER, 'No active session');
+            chrome.cast.ErrorCode.INVALID_PARAMETER, 'No active session');
     }
     if (sessionId !== _session.sessionId) {
         return new chrome.cast.Error(
-          chrome.cast.ErrorCode.INVALID_PARAMETER, 'Unknown session ID');
+            chrome.cast.ErrorCode.INVALID_PARAMETER, 'Unknown session ID');
     }
 }
 
@@ -775,8 +775,8 @@ chrome.cast.Session.prototype.queueLoad = function (loadRequest, successCallback
     if (this._preCheck(errorCallback)) { return; }
     if (!loadRequest.items || loadRequest.items.length === 0) {
         return errorCallback && errorCallback(new chrome.cast.Error(
-          chrome.cast.ErrorCode.SESSION_ERROR, 'INVALID_PARAMS',
-          { reason: 'INVALID_PARAMS', type: 'INVALID_REQUEST' }));
+            chrome.cast.ErrorCode.SESSION_ERROR, 'INVALID_PARAMS',
+            { reason: 'INVALID_PARAMS', type: 'INVALID_REQUEST' }));
     }
     var self = this;
 
@@ -1093,12 +1093,15 @@ chrome.cast.media.Media = function Media (sessionId, mediaSessionId) {
     this.playbackRate = 1;
     this.playerState = chrome.cast.media.PlayerState.IDLE;
     this.idleReason = null;
+    /*
     this.supportedMediaCommands = [
         chrome.cast.media.MediaCommand.PAUSE,
         chrome.cast.media.MediaCommand.SEEK,
         chrome.cast.media.MediaCommand.STREAM_VOLUME,
         chrome.cast.media.MediaCommand.STREAM_MUTE
     ];
+
+     */
     this.volume = new chrome.cast.Volume(1, false);
     this._lastUpdatedTime = Date.now();
     this.media = null;
@@ -1114,12 +1117,12 @@ function mediaPreCheck (media) {
     }
     var currentMedia = _session._getMedia();
     if (!currentMedia ||
-      media.sessionId !== currentMedia.sessionId ||
-      media.mediaSessionId !== currentMedia.mediaSessionId ||
-      media.playerState === chrome.cast.media.PlayerState.IDLE) {
+        media.sessionId !== currentMedia.sessionId ||
+        media.mediaSessionId !== currentMedia.mediaSessionId ||
+        media.playerState === chrome.cast.media.PlayerState.IDLE) {
         return new chrome.cast.Error(
-          chrome.cast.ErrorCode.SESSION_ERROR, 'INVALID_MEDIA_SESSION_ID',
-          { reason: 'INVALID_MEDIA_SESSION_ID', type: 'INVALID_REQUEST' });
+            chrome.cast.ErrorCode.SESSION_ERROR, 'INVALID_MEDIA_SESSION_ID',
+            { reason: 'INVALID_MEDIA_SESSION_ID', type: 'INVALID_REQUEST' });
     }
 }
 
