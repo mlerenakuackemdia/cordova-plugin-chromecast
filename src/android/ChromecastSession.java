@@ -674,7 +674,7 @@ public class ChromecastSession {
                     }
                    JSONObject customData = null;
                    try {
-                       customData = queueLoadRequest.getJSONObject("customData");
+                       customData = queueInsertItemsRequest.getJSONObject("customData");
                    } catch (JSONException e) {
                    }
                     int insertBeforeItemId = queueInsertItemsRequest.getInt("insertBeforeItemId");
