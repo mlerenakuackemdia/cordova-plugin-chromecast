@@ -34,7 +34,7 @@
       <meta-data android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME" android:value="acidhax.cordova.chromecast.CastOptionsProvider" />
     </config-file>
 
-    <framework src="com.google.android.gms:play-services-cast-framework:20.1.0" />
+    <framework src="com.google.android.gms:play-services-cast-framework:21.4.0" />
     <framework src="androidx.work:work-runtime:2.7.1" />
 
     <source-file src="src/android/CastOptionsProvider.java" target-dir="src/acidhax/cordova/chromecast" />
