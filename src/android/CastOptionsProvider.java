@@ -37,10 +37,10 @@ public final class CastOptionsProvider implements OptionsProvider {
         buttonActions.add(MediaIntentReceiver.ACTION_SKIP_PREV);
         buttonActions.add(MediaIntentReceiver.ACTION_TOGGLE_PLAYBACK);
         buttonActions.add(MediaIntentReceiver.ACTION_SKIP_NEXT);
-        buttonActions.add(MediaIntentReceiver.ACTION_STOP_CASTING);
+       // buttonActions.add(MediaIntentReceiver.ACTION_STOP_CASTING);
 
 // Showing "play/pause" and "stop casting" in the compat view of the notification.
-        int[] compatButtonActionsIndices = new int[]{0, 1, 2, 3};
+        int[] compatButtonActionsIndices = new int[]{0, 1, 2};
 
         // Builds a notification with the above actions. Each tap on the "rewind" and "forward" buttons skips 30 seconds.
 // Tapping on the notification opens an Activity with class VideoBrowserActivity.
@@ -50,8 +50,7 @@ public final class CastOptionsProvider implements OptionsProvider {
                 .build();
 
         CastMediaOptions mediaOptions = new CastMediaOptions.Builder()
-              //  .setNotificationOptions(notificationOptions)
-               // .setMediaSessionEnabled(false)
+                .setNotificationOptions(notificationOptions)
                 .build();
         return new CastOptions.Builder()
                 .setCastMediaOptions(mediaOptions)
