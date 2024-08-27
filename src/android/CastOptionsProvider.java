@@ -51,7 +51,7 @@ public final class CastOptionsProvider implements OptionsProvider {
 
         CastMediaOptions mediaOptions = new CastMediaOptions.Builder()
                 .setNotificationOptions(notificationOptions)
-                .setMediaSessionEnabled(false)
+               // .setMediaSessionEnabled(false)
                 .build();
         return new CastOptions.Builder()
                 .setCastMediaOptions(mediaOptions)
