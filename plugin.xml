@@ -35,7 +35,7 @@
     </config-file>
 
     <framework src="com.google.android.gms:play-services-cast-framework:21.4.0" />
-    <framework src="androidx.work:work-runtime:2.7.1" />
+    <framework src="androidx.work:work-runtime:2.9.1" />
 
     <source-file src="src/android/CastOptionsProvider.java" target-dir="src/acidhax/cordova/chromecast" />
     <source-file src="src/android/Chromecast.java" target-dir="src/acidhax/cordova/chromecast" />
