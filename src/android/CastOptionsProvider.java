@@ -53,7 +53,7 @@ public final class CastOptionsProvider implements OptionsProvider {
                 .setNotificationOptions(notificationOptions)
                 .build();
         return new CastOptions.Builder()
-                .setCastMediaOptions(mediaOptions)
+               // .setCastMediaOptions(mediaOptions)
                 .setReceiverApplicationId(appId)
                 .build();
     }
