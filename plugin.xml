@@ -45,6 +45,18 @@
   </platform>
 
   <platform name="ios">
+
+    <edit-config target="*-Info.plist" mode="merge">
+      <dict>
+        <key>NSLocalNetworkUsageDescription</key>
+        <string>Esta aplicación utiliza la red local para detectar dispositivos Chromecast.</string>
+        <key>NSBonjourServices</key>
+        <array>
+          <string>_googlecast._tcp</string>
+        </array>
+      </dict>
+    </edit-config>
+
     <config-file target="config.xml" parent="/*">
       <feature name="Chromecast">
         <param name="ios-package" value="MLPChromecast"/>
