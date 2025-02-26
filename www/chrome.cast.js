@@ -4,8 +4,6 @@
  * Attribution License.
  */
 var EventEmitter = require('cordova-plugin-chromecast.EventEmitter');
-const { json } = require('../tests/www/vendor/mocha')
-
 var chrome = {};
 
 chrome.cast = {
