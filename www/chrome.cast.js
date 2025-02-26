@@ -4,6 +4,7 @@
  * Attribution License.
  */
 var EventEmitter = require('cordova-plugin-chromecast.EventEmitter');
+const { json } = require('../tests/www/vendor/mocha')
 
 var chrome = {};
 
@@ -1410,6 +1411,7 @@ chrome.cast.cordova = {
         this.name = jsonRoute.name;
         this.isNearbyDevice = jsonRoute.isNearbyDevice;
         this.isCastGroup = jsonRoute.isCastGroup;
+        this.deviceType = jsonRoute.deviceType;
     }
 };
 
