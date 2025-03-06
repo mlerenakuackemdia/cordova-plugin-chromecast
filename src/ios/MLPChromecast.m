@@ -19,7 +19,7 @@ int scansRunning = 0;
 - (void)pluginInitialize {
     [super pluginInitialize];
     self.currentSession = [MLPChromecastSession alloc];
-    
+
     NSString* applicationId = [NSUserDefaults.standardUserDefaults stringForKey:@"appId"];
     if (applicationId == nil) {
         applicationId = kGCKDefaultMediaReceiverApplicationID;
@@ -33,24 +33,25 @@ int scansRunning = 0;
         return;
     }
     appId = applicationId;
-    
+
     GCKDiscoveryCriteria *criteria = [[GCKDiscoveryCriteria alloc]
                                       initWithApplicationID:appId];
     GCKCastOptions *options = [[GCKCastOptions alloc] initWithDiscoveryCriteria:criteria];
     options.physicalVolumeButtonsWillControlDeviceVolume = YES;
     options.disableDiscoveryAutostart = NO;
+    options.suspendSessionsWhenBackgrounded = NO;
     [GCKCastContext setSharedInstanceWithOptions:options];
 
     // Enable chromecast logger.
 //    [GCKLogger sharedInstance].delegate = self;
-    
+
     // Ensure we have only 1 listener attached
     [GCKCastContext.sharedInstance.discoveryManager removeListener:self];
     [GCKCastContext.sharedInstance.discoveryManager addListener:self];
-    
+
     [GCKCastContext.sharedInstance.sessionManager removeListener: self];
     [GCKCastContext.sharedInstance.sessionManager addListener: self];
-    
+
     self.currentSession = [self.currentSession initWithListener:self cordovaDelegate:self.commandDelegate];
 }
 
@@ -76,7 +77,7 @@ int scansRunning = 0;
 
 -(void) initialize:(CDVInvokedUrlCommand*)command {
     NSString* applicationId = command.arguments[0];
-    
+
     // If the app id is invalid just send success and return
     if (![self isValidAppId:applicationId]) {
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:@[]];
@@ -89,7 +90,7 @@ int scansRunning = 0;
     // Initialize success
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:@[]];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-    
+
     // Search for existing session
     [self findAvailableReceiver:^{
         [self.currentSession tryRejoin];
@@ -268,7 +269,7 @@ int scansRunning = 0;
     NSDictionary* metadata = command.arguments[7];
     NSDictionary* textTrackStyle = command.arguments[8];
     GCKMediaInformation* mediaInfo = [MLPCastUtilities buildMediaInformation:contentId customData:customData contentType:contentType duration:duration streamType:streamType startTime:currentTime metaData:metadata textTrackStyle:textTrackStyle];
-    
+
     [self.currentSession loadMediaWithCommand:command mediaInfo:mediaInfo autoPlay:autoplay currentTime:currentTime];
 }
 
@@ -280,7 +281,7 @@ int scansRunning = 0;
 - (void)sendMessage:(CDVInvokedUrlCommand*) command {
     NSString* namespace = command.arguments[0];
     NSString* message = command.arguments[1];
-    
+
     [self.currentSession sendMessageWithCommand:command namespace:namespace message:message];
 }
 
@@ -306,7 +307,7 @@ int scansRunning = 0;
 - (void)mediaEditTracksInfo:(CDVInvokedUrlCommand*)command {
     NSArray<NSNumber*>* activeTrackIds = command.arguments[0];
     NSData* textTrackStyle = command.arguments[1];
-    
+
     GCKMediaTextTrackStyle* textTrackStyleObject = [MLPCastUtilities buildTextTrackStyle:textTrackStyle];
     [self.currentSession setActiveTracksWithCommand:command activeTrackIds:activeTrackIds textTrackStyle:textTrackStyleObject];
 }
@@ -318,11 +319,11 @@ int scansRunning = 0;
         [self sendError:@"session_error" message:@"Leave or stop current session before attempting to join new session." command:command];
         return;
     }
-    
+
     NSString* routeID = command.arguments[0];
     // Ensure the scan is running
     [self startRouteScan];
-    
+
     [MLPCastUtilities retry:^BOOL{
         GCKDevice* device = [[GCKCastContext sharedInstance].discoveryManager deviceWithUniqueID:routeID];
         if (device != nil) {
@@ -406,9 +407,9 @@ int scansRunning = 0;
 }
 
 - (void)sendError:(NSString *)code message:(NSString *)message command:(CDVInvokedUrlCommand*)command{
-    
+
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:[MLPCastUtilities createError:code message:message]];
-    
+
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
