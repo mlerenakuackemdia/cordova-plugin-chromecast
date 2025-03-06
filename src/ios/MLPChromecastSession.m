@@ -288,25 +288,116 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
 }
 
 - (void)queueInsertItemsWithCommand:(CDVInvokedUrlCommand *)command queueItems:(NSArray *)queueItems insertBeforeItemId:(NSInteger)insertBeforeItemId {
-    // Use the appropriate GCKRequest method to insert items
-    GCKRequest* request = [self.remoteMediaClient queueInsertItems:queueItems beforeItemWithID:insertBeforeItemId];
+    // Check if remoteMediaClient is available
+    if (self.remoteMediaClient == nil) {
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No active media session"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
     
-    // Create a request delegate to handle the result
-    request.delegate = [self createRequestDelegate:command success:^{
-        // On success, we want to update the media status to reflect the new queue
+    // Check if we have queue items
+    if (queueItems == nil || queueItems.count == 0) {
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No queue items to insert"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
+    // Check if there's a current queue
+    if (self.remoteMediaClient.mediaStatus == nil) {
+        NSLog(@"Warning: No media status available, queue may not exist yet");
+    } else {
+        NSLog(@"Current media status: playerState=%d, queueItemCount=%lu", 
+              (int)self.remoteMediaClient.mediaStatus.playerState,
+              (unsigned long)self.remoteMediaClient.mediaStatus.queueItemCount);
+    }
+    
+    // Log for debugging
+    NSLog(@"Attempting to insert %lu queue items before item ID: %ld", (unsigned long)queueItems.count, (long)insertBeforeItemId);
+    
+    // Create a custom data dictionary
+    NSMutableDictionary *customData = [NSMutableDictionary dictionary];
+    customData[@"insertItemsCommand"] = @YES;
+    
+    // Define success and failure blocks to be used with the delegate
+    void(^successBlock)(void) = ^{
+        NSLog(@"Queue insert items succeeded");
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-    } failure:^(GCKError * error) {
-        // On failure, return the error
+    };
+    
+    void(^failureBlock)(GCKError *) = ^(GCKError *error) {
+        NSLog(@"Queue insert items failed with error: %@", error.description);
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
-                                                         messageAsString:[NSString stringWithFormat:@"queueInsertItems error: %@", error.description]];
+                                             messageAsString:[NSString stringWithFormat:@"queueInsertItems error: %@", error.description]];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-    } abortion:^(GCKRequestAbortReason abortReason) {
-        // Handle abort
+    };
+    
+    void(^abortionBlock)(GCKRequestAbortReason) = ^(GCKRequestAbortReason abortReason) {
+        NSLog(@"Queue insert items aborted with reason: %ld", (long)abortReason);
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
-                                                         messageAsString:[NSString stringWithFormat:@"queueInsertItems aborted: %ld", (long)abortReason]];
+                                             messageAsString:[NSString stringWithFormat:@"queueInsertItems aborted: %ld", (long)abortReason]];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-    }];
+    };
+    
+    // Create a delegate for the request
+    MLPCastRequestDelegate *delegate = [self createRequestDelegate:command 
+                                                          success:successBlock
+                                                          failure:failureBlock
+                                                         abortion:abortionBlock];
+    
+    // Try using a different method if provided, otherwise use the standard one
+    GCKRequest *request = nil;
+    
+    // Try different API methods depending on the version
+    @try {
+        // First try with custom data, which is available in newer API versions
+        request = [self.remoteMediaClient queueInsertItems:queueItems beforeItemWithID:insertBeforeItemId customData:customData];
+        
+        if (request == nil) {
+            // Fallback to method without custom data
+            NSLog(@"Falling back to method without customData");
+            request = [self.remoteMediaClient queueInsertItems:queueItems beforeItemWithID:insertBeforeItemId];
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"Exception trying to call queueInsertItems: %@", exception);
+        // Try alternative method if the previous one failed due to API changes
+        @try {
+            NSLog(@"Trying alternative method for queue insert");
+            // Alternative for item ID 0 (beginning of queue)
+            if (insertBeforeItemId == 0 || insertBeforeItemId == kGCKMediaQueueInvalidItemID) {
+                request = [self.remoteMediaClient queueInsertAndPlayItem:queueItems[0] beforeItemWithID:kGCKMediaQueueInvalidItemID playPosition:0 customData:nil];
+            } else {
+                // For other positions, try one item at a time
+                for (GCKMediaQueueItem *item in queueItems) {
+                    GCKRequest *itemRequest = [self.remoteMediaClient queueInsertAndPlayItem:item 
+                                                                           beforeItemWithID:insertBeforeItemId 
+                                                                               playPosition:0 
+                                                                                customData:nil];
+                    if (itemRequest != nil) {
+                        request = itemRequest; // Keep track of the last request
+                    }
+                }
+            }
+        } @catch (NSException *innerException) {
+            NSLog(@"Exception trying alternative queueInsert methods: %@", innerException);
+        }
+    }
+    
+    // Check if any of the methods succeeded
+    if (request == nil) {
+        NSLog(@"Error: Failed to create queue insert request with any method");
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Failed to create queue insert request"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
+    // Assign delegate to the request
+    request.delegate = delegate;
+    
+    // Manually keep a reference to the delegate until the request completes
+    [requestDelegates addObject:delegate];
+    
+    NSLog(@"Queue insert request created with ID: %ld", (long)request.requestID);
 }
 
 - (void) checkFinishDelegates {

@@ -224,14 +224,73 @@ int scansRunning = 0;
 }
 
 - (void)queueInsertItems:(CDVInvokedUrlCommand *)command {
+    // Check if we have a valid session
+    if (self.currentSession == nil || self.currentSession.remoteMediaClient == nil) {
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                             messageAsString:@"No active session or media client"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
+    // Validate input arguments
+    if (command.arguments.count == 0 || ![command.arguments[0] isKindOfClass:[NSDictionary class]]) {
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                             messageAsString:@"Invalid arguments - expected object with items and insertBeforeItemId"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
+    // Extract data from arguments
     NSDictionary *request = command.arguments[0];
+    
+    // Validate required properties
+    if (![request objectForKey:@"items"] || ![request[@"items"] isKindOfClass:[NSArray class]]) {
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                             messageAsString:@"Missing required property: items"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
+    if (![request objectForKey:@"insertBeforeItemId"]) {
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                             messageAsString:@"Missing required property: insertBeforeItemId"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
     NSArray *items = request[@"items"];
     NSInteger insertBeforeItemId = [request[@"insertBeforeItemId"] integerValue];
+    
+    // Additional validation
+    if (items.count == 0) {
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                             messageAsString:@"Empty items array"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
+    // Log for debugging
+    NSLog(@"queueInsertItems: Received %lu items to insert before itemId %ld", 
+           (unsigned long)items.count, (long)insertBeforeItemId);
     
     // Create queue items array from JSON data
     NSMutableArray *queueItems = [[NSMutableArray alloc] init];
     for (NSDictionary *item in items) {
-        [queueItems addObject: [MLPCastUtilities buildMediaQueueItem:item]];
+        GCKMediaQueueItem *queueItem = [MLPCastUtilities buildMediaQueueItem:item];
+        if (queueItem != nil) {
+            [queueItems addObject:queueItem];
+            NSLog(@"Created queue item with contentID: %@", queueItem.mediaInformation.contentID);
+        } else {
+            NSLog(@"Failed to create queue item from: %@", item);
+        }
+    }
+    
+    // Final validation before calling the session method
+    if (queueItems.count == 0) {
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                             messageAsString:@"Failed to create any valid queue items"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
     }
     
     // Call the session method to insert the items

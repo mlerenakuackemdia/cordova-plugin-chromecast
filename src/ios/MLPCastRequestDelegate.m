@@ -79,16 +79,19 @@
 }
 
 -(void)requestDidComplete:(GCKRequest *)request{
+    NSLog(@"MLPCastRequestDelegate: Request completed successfully for request %@", request);
     didSuccess();
     finished = true;
 }
 
 -(void)request:(GCKRequest *)request didFailWithError:(GCKError *)error{
+    NSLog(@"MLPCastRequestDelegate: Request failed with error: %@ for request %@", error, request);
     didFail(error);
     finished = true;
 }
 
 - (void)request:(GCKRequest *)request didAbortWithReason:(GCKRequestAbortReason)abortReason {
+    NSLog(@"MLPCastRequestDelegate: Request aborted with reason: %ld for request %@", (long)abortReason, request);
     didAbort(abortReason);
     finished = true;
 }
