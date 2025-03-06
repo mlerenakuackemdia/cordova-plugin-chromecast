@@ -5,6 +5,7 @@
 #import <Foundation/Foundation.h>
 #import <GoogleCast/GoogleCast.h>
 #import <Cordova/CDV.h>
+#import <MediaPlayer/MediaPlayer.h>
 #import "MLPChromecastSession.h"
 #import "MLPCastUtilities.h"
 
@@ -15,6 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong) NSMutableArray* devicesAvailable;
 @property (nonatomic, strong) MLPChromecastSession* currentSession;
 @property (nonatomic, strong) CDVInvokedUrlCommand* eventCommand;
+@property (nonatomic, strong) MPRemoteCommandCenter* commandCenter;
 
 - (void)onReset;
 - (void)setup:(CDVInvokedUrlCommand*) command;
@@ -39,6 +41,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)selectRoute:(CDVInvokedUrlCommand*)command;
 - (void)sendEvent:(NSString*)eventName args:(NSArray*)args;
 - (void)queueJumpToItem:(CDVInvokedUrlCommand *)command;
+- (void)setupRemoteCommands;
+- (void)updateNowPlayingInfo:(NSDictionary *)mediaInfo;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -25,6 +25,9 @@ int scansRunning = 0;
         applicationId = kGCKDefaultMediaReceiverApplicationID;
     }
     [self setAppId:applicationId];
+    
+    // Set up remote command center for background audio controls
+    [self setupRemoteCommands];
 }
 
 - (void)setAppId:(NSString*)applicationId {
@@ -39,7 +42,7 @@ int scansRunning = 0;
     GCKCastOptions *options = [[GCKCastOptions alloc] initWithDiscoveryCriteria:criteria];
     options.physicalVolumeButtonsWillControlDeviceVolume = YES;
     options.disableDiscoveryAutostart = NO;
-    options.suspendSessionsWhenBackgrounded = NO;
+    options.suspendSessionsWhenBackgrounded = NO; // Keep session active in background
     [GCKCastContext setSharedInstanceWithOptions:options];
 
     // Enable chromecast logger.
@@ -364,10 +367,12 @@ int scansRunning = 0;
 
 - (void)onMediaLoaded:(NSDictionary *)media {
     [self sendEvent:@"MEDIA_LOAD" args:@[media]];
+    [self updateNowPlayingInfo:media];
 }
 
 - (void)onMediaUpdated:(NSDictionary *)media {
     [self sendEvent:@"MEDIA_UPDATE" args:@[media]];
+    [self updateNowPlayingInfo:media];
 }
 
 - (void)onSessionRejoin:(NSDictionary*)session {
@@ -411,6 +416,157 @@ int scansRunning = 0;
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:[MLPCastUtilities createError:code message:message]];
 
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+}
+
+- (void)setupRemoteCommands {
+    // Get the shared command center
+    self.commandCenter = [MPRemoteCommandCenter sharedCommandCenter];
+    
+    // Add handlers for playback commands
+    [self.commandCenter.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        [self.currentSession.remoteMediaClient play];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    
+    [self.commandCenter.pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        [self.currentSession.remoteMediaClient pause];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    
+    [self.commandCenter.stopCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        [self.currentSession.remoteMediaClient stop];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    
+    [self.commandCenter.togglePlayPauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        GCKMediaStatus *mediaStatus = self.currentSession.remoteMediaClient.mediaStatus;
+        if (mediaStatus.playerState == GCKMediaPlayerStatePlaying) {
+            [self.currentSession.remoteMediaClient pause];
+        } else {
+            [self.currentSession.remoteMediaClient play];
+        }
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    
+    [self.commandCenter.seekForwardCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        GCKMediaStatus *mediaStatus = self.currentSession.remoteMediaClient.mediaStatus;
+        NSTimeInterval currentTime = mediaStatus.streamPosition;
+        GCKMediaSeekOptions *options = [[GCKMediaSeekOptions alloc] init];
+        options.interval = currentTime + 30.0; // Skip forward 30 seconds
+        options.resumeState = GCKMediaResumeStatePlay;
+        [self.currentSession.remoteMediaClient seekWithOptions:options];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    
+    [self.commandCenter.seekBackwardCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        GCKMediaStatus *mediaStatus = self.currentSession.remoteMediaClient.mediaStatus;
+        NSTimeInterval currentTime = mediaStatus.streamPosition;
+        GCKMediaSeekOptions *options = [[GCKMediaSeekOptions alloc] init];
+        options.interval = MAX(0, currentTime - 10.0); // Skip back 10 seconds, but not below 0
+        options.resumeState = GCKMediaResumeStatePlay;
+        [self.currentSession.remoteMediaClient seekWithOptions:options];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    
+    [self.commandCenter.skipForwardCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        GCKMediaStatus *mediaStatus = self.currentSession.remoteMediaClient.mediaStatus;
+        if (mediaStatus.queueItemCount > 0 && mediaStatus.currentItemID != kGCKMediaQueueInvalidItemID) {
+            NSUInteger nextItemId = mediaStatus.currentItemID + 1;
+            [self.currentSession.remoteMediaClient queueJumpToItemWithID:nextItemId];
+            return MPRemoteCommandHandlerStatusSuccess;
+        }
+        return MPRemoteCommandHandlerStatusNoSuchContent;
+    }];
+    
+    [self.commandCenter.skipBackwardCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        GCKMediaStatus *mediaStatus = self.currentSession.remoteMediaClient.mediaStatus;
+        if (mediaStatus.queueItemCount > 0 && mediaStatus.currentItemID != kGCKMediaQueueInvalidItemID && mediaStatus.currentItemID > 0) {
+            NSUInteger prevItemId = mediaStatus.currentItemID - 1;
+            [self.currentSession.remoteMediaClient queueJumpToItemWithID:prevItemId];
+            return MPRemoteCommandHandlerStatusSuccess;
+        }
+        return MPRemoteCommandHandlerStatusNoSuchContent;
+    }];
+    
+    [self.commandCenter.changePlaybackPositionCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        MPChangePlaybackPositionCommandEvent *positionEvent = (MPChangePlaybackPositionCommandEvent *)event;
+        GCKMediaSeekOptions *options = [[GCKMediaSeekOptions alloc] init];
+        options.interval = positionEvent.positionTime;
+        options.resumeState = GCKMediaResumeStatePlay;
+        [self.currentSession.remoteMediaClient seekWithOptions:options];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+}
+
+- (void)updateNowPlayingInfo:(NSDictionary *)mediaInfo {
+    if (!mediaInfo) {
+        [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:nil];
+        return;
+    }
+    
+    NSMutableDictionary *nowPlayingInfo = [NSMutableDictionary dictionary];
+    
+    // Get media information
+    NSString *title = mediaInfo[@"title"] != [NSNull null] ? mediaInfo[@"title"] : @"";
+    NSString *subtitle = mediaInfo[@"subtitle"] != [NSNull null] ? mediaInfo[@"subtitle"] : @"";
+    NSString *albumTitle = mediaInfo[@"album"] != [NSNull null] ? mediaInfo[@"album"] : @"";
+    NSString *artist = mediaInfo[@"artist"] != [NSNull null] ? mediaInfo[@"artist"] : @"";
+    double duration = [mediaInfo[@"duration"] doubleValue];
+    double currentTime = [mediaInfo[@"currentTime"] doubleValue];
+    NSString *playerState = mediaInfo[@"playerState"];
+    
+    // Set basic metadata
+    [nowPlayingInfo setObject:title forKey:MPMediaItemPropertyTitle];
+    
+    if (subtitle.length > 0) {
+        [nowPlayingInfo setObject:subtitle forKey:MPMediaItemPropertySubtitle];
+    }
+    
+    if (albumTitle.length > 0) {
+        [nowPlayingInfo setObject:albumTitle forKey:MPMediaItemPropertyAlbumTitle];
+    }
+    
+    if (artist.length > 0) {
+        [nowPlayingInfo setObject:artist forKey:MPMediaItemPropertyArtist];
+    }
+    
+    // Set playback info
+    [nowPlayingInfo setObject:@(duration) forKey:MPMediaItemPropertyPlaybackDuration];
+    [nowPlayingInfo setObject:@(currentTime) forKey:MPNowPlayingInfoPropertyElapsedPlaybackTime];
+    
+    // Set playback rate (0.0 for paused, 1.0 for playing)
+    float playbackRate = 0.0;
+    if ([playerState isEqualToString:@"PLAYING"]) {
+        playbackRate = 1.0;
+    }
+    [nowPlayingInfo setObject:@(playbackRate) forKey:MPNowPlayingInfoPropertyPlaybackRate];
+    
+    // Try to load artwork image if available
+    if (mediaInfo[@"imageUrl"] != [NSNull null] && [mediaInfo[@"imageUrl"] length] > 0) {
+        NSString *imageUrl = mediaInfo[@"imageUrl"];
+        // Load image asynchronously to avoid blocking main thread
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSURL *url = [NSURL URLWithString:imageUrl];
+            NSData *imageData = [NSData dataWithContentsOfURL:url];
+            if (imageData) {
+                UIImage *image = [UIImage imageWithData:imageData];
+                if (image) {
+                    MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:image.size 
+                                                                                requestHandler:^UIImage * _Nonnull(CGSize size) {
+                                                                                    return image;
+                                                                                }];
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        NSMutableDictionary *updatedInfo = [nowPlayingInfo mutableCopy];
+                        [updatedInfo setObject:artwork forKey:MPMediaItemPropertyArtwork];
+                        [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:updatedInfo];
+                    });
+                }
+            }
+        });
+    }
+    
+    // Set the info without waiting for artwork
+    [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:nowPlayingInfo];
 }
 
 @end

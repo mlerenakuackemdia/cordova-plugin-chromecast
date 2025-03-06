@@ -20,6 +20,12 @@
 -->
 ## Release Notes for cordova-plugin-chromecast
 
+### 2.1.0 (2025-03-06)
+
+* (ios) Add support for audio controls in background
+* (ios) Implement lock screen and control center media controls for Chromecast sessions
+* (ios) Enable continuous playback when app is in background
+
 ### 2.0.1 (2020-11-28)
 
 * (ios) Bug Fix - media loaded without any metadata caused crash

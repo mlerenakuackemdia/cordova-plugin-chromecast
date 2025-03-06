@@ -2,7 +2,7 @@
 <plugin xmlns="http://phonegap.com/ns/plugins/1.0"
         xmlns:android="http://schemas.android.com/apk/res/android"
         id="cordova-plugin-chromecast"
-        version="2.0.1">
+        version="2.1.0">
   <engines>
     <engine name="cordova" version=">=3.4.0" />
   </engines>
@@ -50,6 +50,13 @@
         <param name="ios-package" value="MLPChromecast"/>
         <param name="onload" value="true" />
       </feature>
+    </config-file>
+    
+    <!-- Add background audio support -->
+    <config-file target="*-Info.plist" parent="UIBackgroundModes">
+      <array>
+        <string>audio</string>
+      </array>
     </config-file>
 
     <podspec>

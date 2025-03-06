@@ -138,6 +138,17 @@ Supported *Methods*:
 We have added some additional methods that are unique to this plugin (that *do not* exist in the chrome cast API).
 They can all be found in the `chrome.cast.cordova` object. 
 
+#### Background Audio Controls (iOS)
+This plugin supports iOS background audio playback with lock screen and control center media controls. The implementation automatically:
+
+- Keeps the Chromecast session active when the app is in the background
+- Shows media information in the iOS control center and lock screen
+- Allows controlling playback (play/pause/seek/skip) from the control center or lock screen
+- Enables audio to continue playing when the app is in the background
+
+No additional setup is required - this functionality is automatically enabled.
+
+#### Custom Route Selector
 To make your own **custom route selector** use this:
 ```js
 // This will begin an active scan for routes
