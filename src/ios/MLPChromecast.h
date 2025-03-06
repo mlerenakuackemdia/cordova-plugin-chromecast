@@ -24,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)requestSession:(CDVInvokedUrlCommand*) command;
 - (void)setReceiverVolumeLevel:(CDVInvokedUrlCommand*) command;
 - (void)queueLoad:(CDVInvokedUrlCommand *)command;
+- (void)queueInsertItems:(CDVInvokedUrlCommand *)command;
 - (void)setMediaVolume:(CDVInvokedUrlCommand*) command;
 - (void)setReceiverMuted:(CDVInvokedUrlCommand*) command;
 - (void)sessionStop:(CDVInvokedUrlCommand*)command;

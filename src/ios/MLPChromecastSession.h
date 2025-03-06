@@ -35,6 +35,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)mediaStopWithCommand:(CDVInvokedUrlCommand*)command;
 - (void)setActiveTracksWithCommand:(CDVInvokedUrlCommand*)command activeTrackIds:(NSArray<NSNumber*>*)activeTrackIds textTrackStyle:(GCKMediaTextTrackStyle*)textTrackStyle;
 - (void)queueLoadItemsWithCommand:(CDVInvokedUrlCommand *)command queueItems:(NSArray *)queueItems startIndex:(NSInteger)startIndex repeatMode:(GCKMediaRepeatMode)repeatMode;
+- (void)queueInsertItemsWithCommand:(CDVInvokedUrlCommand *)command queueItems:(NSArray *)queueItems insertBeforeItemId:(NSInteger)insertBeforeItemId;
 - (void)queueJumpToItemWithCommand:(CDVInvokedUrlCommand *)command itemId:(NSUInteger)itemId;
 - (void) checkFinishDelegates;
 @end

@@ -223,6 +223,21 @@ int scansRunning = 0;
     [self.currentSession queueLoadItemsWithCommand:command queueItems:queueItems startIndex:startIndex repeatMode:repeatMode];
 }
 
+- (void)queueInsertItems:(CDVInvokedUrlCommand *)command {
+    NSDictionary *request = command.arguments[0];
+    NSArray *items = request[@"items"];
+    NSInteger insertBeforeItemId = [request[@"insertBeforeItemId"] integerValue];
+    
+    // Create queue items array from JSON data
+    NSMutableArray *queueItems = [[NSMutableArray alloc] init];
+    for (NSDictionary *item in items) {
+        [queueItems addObject: [MLPCastUtilities buildMediaQueueItem:item]];
+    }
+    
+    // Call the session method to insert the items
+    [self.currentSession queueInsertItemsWithCommand:command queueItems:queueItems insertBeforeItemId:insertBeforeItemId];
+}
+
 - (void)queueJumpToItem:(CDVInvokedUrlCommand *)command {
     NSUInteger itemId = [command.arguments[0] unsignedIntegerValue];
     [self.currentSession queueJumpToItemWithCommand:command itemId:itemId];

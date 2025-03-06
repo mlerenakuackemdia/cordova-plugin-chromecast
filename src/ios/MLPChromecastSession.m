@@ -287,6 +287,28 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
     request.delegate = [self createLoadMediaRequestDelegate:command];
 }
 
+- (void)queueInsertItemsWithCommand:(CDVInvokedUrlCommand *)command queueItems:(NSArray *)queueItems insertBeforeItemId:(NSInteger)insertBeforeItemId {
+    // Use the appropriate GCKRequest method to insert items
+    GCKRequest* request = [self.remoteMediaClient queueInsertItems:queueItems beforeItemWithID:insertBeforeItemId];
+    
+    // Create a request delegate to handle the result
+    request.delegate = [self createRequestDelegate:command success:^{
+        // On success, we want to update the media status to reflect the new queue
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    } failure:^(GCKError * error) {
+        // On failure, return the error
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                                         messageAsString:[NSString stringWithFormat:@"queueInsertItems error: %@", error.description]];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    } abortion:^(GCKRequestAbortReason abortReason) {
+        // Handle abort
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                                         messageAsString:[NSString stringWithFormat:@"queueInsertItems aborted: %ld", (long)abortReason]];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    }];
+}
+
 - (void) checkFinishDelegates {
     NSMutableArray<MLPCastRequestDelegate*>* tempArray = [NSMutableArray new];
     for (MLPCastRequestDelegate* delegate in requestDelegates) {
