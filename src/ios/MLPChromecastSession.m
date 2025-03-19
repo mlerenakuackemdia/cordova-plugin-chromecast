@@ -559,12 +559,28 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
             NSLog(@"Found queue with %lu items", 
                   (unsigned long)session.remoteMediaClient.mediaStatus.queueItemCount);
             // Request queue items to ensure they're loaded
-            GCKRequest* request = [session.remoteMediaClient queueFetchItems];
-            request.delegate = [self createRequestDelegate:nil success:^{
-                NSLog(@"Queue items fetched successfully during resume");
-            } failure:^(GCKError * error) {
-                NSLog(@"Failed to fetch queue items during resume: %@", error);
-            } abortion:nil];
+            // Use queueFetchItemIDs instead of queueFetchItems which doesn't exist
+            NSMutableArray<NSNumber *> *itemIds = [NSMutableArray array];
+            
+            // Get all item IDs from the queue
+            for (NSUInteger i = 0; i < session.remoteMediaClient.mediaStatus.queueItemCount; i++) {
+                GCKMediaQueueItem *item = [session.remoteMediaClient.mediaStatus queueItemAtIndex:i];
+                if (item) {
+                    [itemIds addObject:@(item.itemID)];
+                }
+            }
+            
+            if (itemIds.count > 0) {
+                NSLog(@"Fetching %lu queue items during resume", (unsigned long)itemIds.count);
+                GCKRequest* request = [session.remoteMediaClient queueFetchItemsForIDs:itemIds];
+                request.delegate = [self createRequestDelegate:nil success:^{
+                    NSLog(@"Queue items fetched successfully during resume");
+                } failure:^(GCKError * error) {
+                    NSLog(@"Failed to fetch queue items during resume: %@", error);
+                } abortion:nil];
+            } else {
+                NSLog(@"No queue item IDs available to fetch");
+            }
         }
         
         // We are done resuming, regardless of outcome
