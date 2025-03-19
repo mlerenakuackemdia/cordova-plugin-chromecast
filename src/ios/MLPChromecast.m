@@ -91,25 +91,72 @@ int scansRunning = 0;
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:@[]];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 
-    // Search for existing session
+    // Search for existing session with improved rejoin logic
     [self findAvailableReceiver:^{
-        [self.currentSession tryRejoin];
+        // Start device discovery to ensure device is available
+        [[GCKCastContext sharedInstance].discoveryManager startDiscovery];
+        
+        // Add a brief delay before attempting to rejoin to allow discovery to find devices
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            NSLog(@"Attempting to rejoin existing session");
+            [self.currentSession tryRejoin];
+        });
     }];
 }
 
 - (void)findAvailableReceiver:(void(^)(void))successCallback {
     // Ensure the scan is running
     [self startRouteScan];
+    
+    // Log the start of device discovery
+    NSLog(@"Starting device discovery for available receivers");
+    
+    // Increased retry count to 8 (using new exponential backoff in retry method)
+    // This gives more time for device discovery with gradually increasing intervals
     [MLPCastUtilities retry:^BOOL{
         // Did we find any devices?
-        if ([GCKCastContext.sharedInstance.discoveryManager hasDiscoveredDevices]) {
+        BOOL hasDevices = [GCKCastContext.sharedInstance.discoveryManager hasDiscoveredDevices];
+        
+        if (hasDevices) {
+            // Get device count for logging
+            NSUInteger deviceCount = [GCKCastContext.sharedInstance.discoveryManager deviceCount];
+            NSLog(@"Found %lu Chromecast device(s)", (unsigned long)deviceCount);
+            
+            // See if any of these devices matches our saved session
+            GCKSessionManager *sessionManager = [GCKCastContext sharedInstance].sessionManager;
+            GCKSession *currentSession = sessionManager.currentSession;
+            
+            if (currentSession != nil) {
+                NSString *deviceId = currentSession.device.deviceID;
+                BOOL foundSessionDevice = NO;
+                
+                // Check if the device from our saved session is among the discovered devices
+                for (NSUInteger i = 0; i < deviceCount; i++) {
+                    GCKDevice *device = [[GCKCastContext sharedInstance].discoveryManager deviceAtIndex:i];
+                    if ([device.deviceID isEqualToString:deviceId]) {
+                        NSLog(@"Found device matching our current session: %@", device.friendlyName);
+                        foundSessionDevice = YES;
+                        break;
+                    }
+                }
+                
+                if (!foundSessionDevice) {
+                    NSLog(@"Warning: Current session device not found in discovery results");
+                }
+            }
+            
             [self sendReceiverAvailable:YES];
             return YES;
         }
+        
+        NSLog(@"No Chromecast devices found yet, continuing discovery...");
         return NO;
-    } forTries:5 callback:^(BOOL passed){
+    } forTries:8 callback:^(BOOL passed){
         if (passed) {
+            NSLog(@"Device discovery completed successfully, proceeding with session setup");
             successCallback();
+        } else {
+            NSLog(@"Failed to find any Chromecast devices after several attempts");
         }
     }];
 }

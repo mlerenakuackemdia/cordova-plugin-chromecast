@@ -42,12 +42,56 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
         // if the currentSession is null we should handle any potential resuming in didResumeCastSession
         return;
     }
+    
     // Make sure we are looking at the actual current session, sometimes it doesn't get removed
     [self setSession:self.sessionManager.currentCastSession];
-    // Only if the session exists, is connected, and we are not already resuming the session
-    if (currentSession != nil && currentSession.connectionState != GCKConnectionStateDisconnected && isResumingSession == NO) {
-        // Trigger the SESSION_LISTENER
-        [self.sessionListener onSessionRejoin:[MLPCastUtilities createSessionObject:currentSession]];
+    
+    // Reset resumingSession flag if it's been stuck for more than 30 seconds
+    static NSDate *resumingStartTime = nil;
+    if (isResumingSession) {
+        if (resumingStartTime == nil) {
+            resumingStartTime = [NSDate date];
+        } else if ([[NSDate date] timeIntervalSinceDate:resumingStartTime] > 30) {
+            NSLog(@"Resetting stuck isResumingSession flag after 30 seconds timeout");
+            isResumingSession = NO;
+            resumingStartTime = nil;
+        }
+    } else {
+        resumingStartTime = nil;
+    }
+    
+    // Enhanced connection verification:
+    // 1. Check if session exists
+    // 2. Verify connection state is actually connected
+    // 3. Check we're not already in the resuming process
+    // 4. Verify that device is still available in discovery manager
+    if (currentSession != nil && 
+        currentSession.connectionState == GCKConnectionStateConnected && 
+        isResumingSession == NO) {
+        
+        // Additional verification that the device is still available
+        BOOL deviceAvailable = NO;
+        GCKDiscoveryManager* discoveryManager = GCKCastContext.sharedInstance.discoveryManager;
+        NSString *deviceId = currentSession.device.deviceID;
+        
+        // Try to find the device in the current discovery list
+        for (int i = 0; i < [discoveryManager deviceCount]; i++) {
+            GCKDevice* device = [discoveryManager deviceAtIndex:i];
+            if ([device.deviceID isEqualToString:deviceId]) {
+                deviceAvailable = YES;
+                break;
+            }
+        }
+        
+        if (deviceAvailable) {
+            NSLog(@"Device still available, triggering session rejoin");
+            // Trigger the SESSION_LISTENER
+            [self.sessionListener onSessionRejoin:[MLPCastUtilities createSessionObject:currentSession]];
+        } else {
+            NSLog(@"Device no longer available despite having a connected session");
+            // Force a disconnect since the device is no longer available
+            [currentSession endWithAction:GCKSessionEndActionLeave];
+        }
     }
 }
 
@@ -452,32 +496,80 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
 }
 
 - (void)sessionManager:(GCKSessionManager *)sessionManager didResumeCastSession:(GCKCastSession *)session {
+    // Log for debugging purposes
+    NSLog(@"didResumeCastSession called for session ID: %@", session.sessionID);
+    
     if (currentSession && currentSession.sessionID == session.sessionID) {
+        NSLog(@"Session IDs match, this appears to be an internal iOS resume event, not handling");
         // ios randomly resumes current session, don't trigger SESSION_LISTENER in this case
         return;
     }
     
+    // Set resuming flag with timestamp for timeout safety
     isResumingSession = YES;
+    
     // Do all the setup/configuration required when we get a session
     [self sessionManager:sessionManager didStartCastSession:session];
     
-    // Delay returning the resumed session, so that ios has a chance to get any media first
+    // Start active device scan to ensure device is still available
+    [[GCKCastContext sharedInstance].discoveryManager startDiscovery];
+    
+    // Delay returning the resumed session, so that iOS has a chance to get any media first
     // If we return immediately, the session may be sent out without media even though there should be
-    // The case where a session is resumed that has no media will have to wait the full 2s before being sent
+    // The case where a session is resumed that has no media will have to wait the full timeout before being sent
+    
+    // Increased number of retries and changed retry strategy
+    __block int mediaStatusRetryCount = 0;
     [MLPCastUtilities retry:^BOOL{
         // Did we find any media?
         if (session.remoteMediaClient.mediaStatus != nil) {
+            NSLog(@"Media status found on retry %d", mediaStatusRetryCount);
             // No need to wait any longer
             return YES;
         }
+        
+        // Log the retry attempt
+        mediaStatusRetryCount++;
+        NSLog(@"Waiting for media status, retry %d of 5", mediaStatusRetryCount);
+        
+        // Additional checks to validate if session is still valid
+        if (session.connectionState == GCKConnectionStateDisconnected) {
+            NSLog(@"Session disconnected during resumption, aborting further retries");
+            return YES;  // Return yes to stop retrying, we'll handle the failure in the callback
+        }
+        
         return NO;
-    } forTries:2 callback:^(BOOL passed){
-        // trigger the SESSION_LISTENER event
-        [self.sessionListener onSessionRejoin:[MLPCastUtilities createSessionObject:session]];
-        // We are done resuming
+    } forTries:5 callback:^(BOOL passed){
+        // Check if we have a valid media status
+        BOOL hasValidMedia = (session.remoteMediaClient.mediaStatus != nil);
+        
+        if (passed && hasValidMedia) {
+            NSLog(@"Successfully resumed session with media status");
+            // trigger the SESSION_LISTENER event with complete session info
+            [self.sessionListener onSessionRejoin:[MLPCastUtilities createSessionObject:session]];
+        } else {
+            NSLog(@"Failed to get media status after retries or session disconnected");
+            // Still trigger session with whatever we have, but log the issue
+            [self.sessionListener onSessionRejoin:[MLPCastUtilities createSessionObject:session]];
+        }
+        
+        // Check for media queue items too
+        if (session.remoteMediaClient.mediaStatus != nil && 
+            session.remoteMediaClient.mediaStatus.queueItemCount > 0) {
+            NSLog(@"Found queue with %lu items", 
+                  (unsigned long)session.remoteMediaClient.mediaStatus.queueItemCount);
+            // Request queue items to ensure they're loaded
+            GCKRequest* request = [session.remoteMediaClient queueFetchItems];
+            request.delegate = [self createRequestDelegate:nil success:^{
+                NSLog(@"Queue items fetched successfully during resume");
+            } failure:^(GCKError * error) {
+                NSLog(@"Failed to fetch queue items during resume: %@", error);
+            } abortion:nil];
+        }
+        
+        // We are done resuming, regardless of outcome
         isResumingSession = NO;
     }];
-    
 }
 
 #pragma -- GCKRemoteMediaClientListener
@@ -508,9 +600,18 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
     
     // update the last media now
     lastMedia = [MLPCastUtilities createMediaObject:currentSession];
-    // Only send updates if we aren't loading media
+    
+    // Enhanced media state synchronization
+    // Only send updates if we aren't loading media or resuming session
     if (!loadMediaCallback && !isResumingSession) {
-        [self.sessionListener onMediaUpdated:lastMedia];
+        // Check if we have complete media information before sending update
+        if (lastMedia && [lastMedia count] > 0) {
+            // Log what we're sending
+            NSLog(@"Sending media update with playerState: %@", lastMedia[@"playerState"]);
+            [self.sessionListener onMediaUpdated:lastMedia];
+        } else {
+            NSLog(@"Media information is incomplete, not sending media update");
+        }
     }
 }
 

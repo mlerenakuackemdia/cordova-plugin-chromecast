@@ -985,26 +985,58 @@ NSDictionary* queueOrderIDsByItemId = nil;
     return @{@"code":code,@"description":message};
 }
 
-// retries every 1 second forTries times
-// pass -1 to forTries to try infinitely
+// Improved retry mechanism with exponential backoff
+// Initial delay is 0.5 second, then 1s, 2s, 4s, etc. up to max 5 seconds per try
+// pass -1 to forTries to try indefinitely
 + (void)retry:(BOOL(^)(void))condition forTries:(int)remainTries callback:(void(^)(BOOL))callback {
+    static NSMutableDictionary<NSString*, NSNumber*> *retryCounters;
+    static dispatch_once_t onceToken;
+    
+    // Initialize the static dictionary once
+    dispatch_once(&onceToken, ^{
+        retryCounters = [NSMutableDictionary new];
+    });
+    
+    // Get a unique key for this retry sequence using the address of the callback block
+    NSString *retryKey = [NSString stringWithFormat:@"%p", callback];
+    
+    // Get or initialize retry count for this sequence
+    NSNumber *retryCount = [retryCounters objectForKey:retryKey];
+    if (retryCount == nil) {
+        retryCount = @0;
+        [retryCounters setObject:retryCount forKey:retryKey];
+    }
+    
+    // Try the condition
     BOOL passed = condition();
+    
+    // If passed or out of tries, call the callback and clean up
     if (passed || remainTries == 0) {
         callback(passed);
+        [retryCounters removeObjectForKey:retryKey]; // Clean up
         return;
     }
     
+    // Decrement remaining tries and increment retry count
     remainTries--;
+    int currentRetryCount = [retryCount intValue] + 1;
+    [retryCounters setObject:@(currentRetryCount) forKey:retryKey];
     
-    // check again in 1 second
-    NSMethodSignature *signature  = [self methodSignatureForSelector:@selector(retry:forTries:callback:)];
-    NSInvocation      *invocation = [NSInvocation invocationWithMethodSignature:signature];
+    // Calculate delay with exponential backoff (0.5s, 1s, 2s, 4s, max 5s)
+    NSTimeInterval delay = MIN(5.0, 0.5 * pow(2, currentRetryCount - 1));
+    
+    NSLog(@"Retry %d: Will try again in %.1f seconds (remaining tries: %d)", 
+          currentRetryCount, delay, remainTries);
+    
+    // Set up the next retry after the calculated delay
+    NSMethodSignature *signature = [self methodSignatureForSelector:@selector(retry:forTries:callback:)];
+    NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
     [invocation setTarget:self];
     [invocation setSelector:_cmd];
     [invocation setArgument:&condition atIndex:2];
     [invocation setArgument:&remainTries atIndex:3];
     [invocation setArgument:&callback atIndex:4];
-    [NSTimer scheduledTimerWithTimeInterval:1 invocation:invocation repeats:NO];
+    [NSTimer scheduledTimerWithTimeInterval:delay invocation:invocation repeats:NO];
 }
 
 
