@@ -114,7 +114,7 @@ int scansRunning = 0;
     
     // Ensure we're able to receive remote control events
     [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
-    [self becomeFirstResponder];
+    // No need to call becomeFirstResponder here - CDVPlugin doesn't implement it
 }
 
 - (void)setAppId:(NSString*)applicationId {

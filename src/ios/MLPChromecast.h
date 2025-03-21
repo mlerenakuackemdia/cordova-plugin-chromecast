@@ -52,6 +52,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)canBecomeFirstResponder;
 - (void)remoteControlReceivedWithEvent:(UIEvent *)event;
 - (void)volumeChanged:(NSNotification *)notification;
+- (void)sendVolumeButtonEvent:(NSString *)eventName;
 @end
 
 NS_ASSUME_NONNULL_END

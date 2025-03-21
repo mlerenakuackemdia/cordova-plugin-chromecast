@@ -69,7 +69,9 @@
     <source-file src="src/ios/MLPCastUtilities.m" />
     <header-file src="src/ios/MLPCastRequestDelegate.h" />
     <source-file src="src/ios/MLPCastRequestDelegate.m" />
+    <!-- Commenting out problematic files
     <header-file src="src/ios/AVAudioSession/AVAudioSession+Extensions.h" />
     <source-file src="src/ios/AVAudioSession/AVAudioSession+Extensions.m" />
+    -->
   </platform>
 </plugin>
