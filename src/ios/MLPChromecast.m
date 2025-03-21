@@ -4,7 +4,8 @@
 
 #import "MLPChromecast.h"
 #import "MLPCastUtilities.h"
-#import "AVAudioSession/AVAudioSession+Extensions.h"
+// Temporarily comment out extension import
+// #import "AVAudioSession+Extensions.h"
 
 // Implementation of VolumeButtonHandler
 @implementation VolumeButtonHandler {
@@ -93,17 +94,27 @@ int scansRunning = 0;
     [self setAppId:applicationId];
     
     // Register for volume changed notifications and make sure our plugin can handle application events
-    // Use our AVAudioSession extension to properly register for volume events
-    [AVAudioSession registerForVolumeNotifications:self selector:@selector(volumeChanged:)];
+    // Use direct notification registration instead of the extension
+    [[NSNotificationCenter defaultCenter] addObserver:self 
+                                             selector:@selector(volumeChanged:) 
+                                                 name:@"AVSystemController_SystemVolumeDidChangeNotification" 
+                                               object:nil];
+    
+    // Create a hidden MPVolumeView to help intercept volume button events
+    UIWindow *window = [UIApplication sharedApplication].keyWindow;
+    if (window) {
+        // Add a hidden MPVolumeView to the window which is needed for volume button events
+        MPVolumeView *volumeView = [[MPVolumeView alloc] initWithFrame:CGRectMake(-100, -100, 1, 1)];
+        volumeView.hidden = YES;
+        [window addSubview:volumeView];
+        
+        // Also add our custom handler
+        [window addSubview:[[VolumeButtonHandler alloc] initWithChromecast:self]];
+    }
     
     // Ensure we're able to receive remote control events
     [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
-    
-    // Directly add our custom event handling to the app's main window
-    UIWindow *window = [UIApplication sharedApplication].keyWindow;
-    if (window) {
-        [window addSubview:[[VolumeButtonHandler alloc] initWithChromecast:self]];
-    }
+    [self becomeFirstResponder];
 }
 
 - (void)setAppId:(NSString*)applicationId {
@@ -219,14 +230,39 @@ static float lastSystemVolume = -1;
 // We need to send these events to Cordova directly for better compatibility
 - (void)sendVolumeButtonEvent:(NSString *)eventName {
     if (self.webView) {
+        // Create JavaScript that will dispatch the event to the document
         NSString *js = [NSString stringWithFormat:@"cordova.fireDocumentEvent('%@');", eventName];
-        if ([self.webView respondsToSelector:@selector(stringByEvaluatingJavaScriptFromString:)]) {
+        
+        // Use the appropriate method to evaluate JavaScript based on the webView type
+        if ([self.webView isKindOfClass:NSClassFromString(@"UIWebView")]) {
+            // UIWebView - older iOS versions
             [(UIWebView *)self.webView stringByEvaluatingJavaScriptFromString:js];
-        } else {
-            [self.webView performSelectorOnMainThread:@selector(evaluateJavaScript:completionHandler:)
-                                          withObject:js
-                                       waitUntilDone:NO];
+        } 
+        else {
+            // WKWebView - iOS 8+ (the most common case now)
+            SEL wkEvalSelector = NSSelectorFromString(@"evaluateJavaScript:completionHandler:");
+            if ([self.webView respondsToSelector:wkEvalSelector]) {
+                // Cast to id to avoid compile-time errors
+                typedef void (^CompletionHandler)(id, NSError *);
+                CompletionHandler handler = ^(id result, NSError *error) {
+                    if (error) {
+                        NSLog(@"Error firing Cordova event: %@", error);
+                    }
+                };
+                
+                // Use performSelector to invoke the method
+                NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:
+                                           [self.webView methodSignatureForSelector:wkEvalSelector]];
+                [invocation setSelector:wkEvalSelector];
+                [invocation setTarget:self.webView];
+                [invocation setArgument:&js atIndex:2];
+                [invocation setArgument:&handler atIndex:3];
+                [invocation performSelectorOnMainThread:@selector(invoke) withObject:nil waitUntilDone:NO];
+            }
         }
+        
+        // Also log for debugging
+        NSLog(@"Fired Cordova event: %@", eventName);
     }
 }
 
