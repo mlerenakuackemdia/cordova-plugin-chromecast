@@ -20,11 +20,20 @@ int scansRunning = 0;
     [super pluginInitialize];
     self.currentSession = [MLPChromecastSession alloc];
 
+    // Make sure we're the first responder for the volume buttons
+    [self.webView becomeFirstResponder];
+
     NSString* applicationId = [NSUserDefaults.standardUserDefaults stringForKey:@"appId"];
     if (applicationId == nil) {
         applicationId = kGCKDefaultMediaReceiverApplicationID;
     }
     [self setAppId:applicationId];
+    
+    // Register for volume changed notifications
+    [[NSNotificationCenter defaultCenter] addObserver:self 
+                                             selector:@selector(volumeChanged:) 
+                                                 name:@"AVSystemController_SystemVolumeDidChangeNotification" 
+                                               object:nil];
 }
 
 - (void)setAppId:(NSString*)applicationId {
@@ -37,10 +46,14 @@ int scansRunning = 0;
     GCKDiscoveryCriteria *criteria = [[GCKDiscoveryCriteria alloc]
                                       initWithApplicationID:appId];
     GCKCastOptions *options = [[GCKCastOptions alloc] initWithDiscoveryCriteria:criteria];
-    options.physicalVolumeButtonsWillControlDeviceVolume = YES;
+    // Set to NO to allow the app to handle volume buttons instead of the Chromecast directly
+    options.physicalVolumeButtonsWillControlDeviceVolume = NO;
     options.disableDiscoveryAutostart = NO;
     options.suspendSessionsWhenBackgrounded = NO;
     [GCKCastContext setSharedInstanceWithOptions:options];
+    
+    // Register for remote control events (volume buttons)
+    [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
 
     // Enable chromecast logger.
 //    [GCKLogger sharedInstance].delegate = self;
@@ -67,6 +80,66 @@ int scansRunning = 0;
 // Clean up any running process
 - (void)onReset {
     [self stopRouteScanForSetup];
+}
+
+#pragma mark - Volume Control Handling
+
+// Last volume level to detect whether volume went up or down
+static float lastSystemVolume = -1;
+
+- (void)volumeChanged:(NSNotification *)notification {
+    // Only handle when connected to Chromecast
+    if (self.currentSession == nil || self.currentSession.remoteMediaClient == nil) {
+        return;
+    }
+
+    float currentVolume = [[[notification userInfo] objectForKey:@"AVSystemController_AudioVolumeNotificationParameter"] floatValue];
+    
+    // Initialize lastSystemVolume if this is first notification
+    if (lastSystemVolume < 0) {
+        lastSystemVolume = currentVolume;
+        return;
+    }
+    
+    // Determine if volume went up or down
+    if (currentVolume > lastSystemVolume) {
+        NSLog(@"Volume up button pressed, sending volumeupbutton event");
+        [self sendEvent:@"volumeupbutton" args:@[]];
+        
+        // Optional: automatically adjust Chromecast volume
+        if (self.currentSession != nil && self.currentSession.sessionManager.currentCastSession != nil) {
+            float castVolume = self.currentSession.sessionManager.currentCastSession.currentDeviceVolume;
+            [self.currentSession setReceiverVolumeLevelWithCommand:nil newLevel:MIN(1.0, castVolume + 0.05)];
+        }
+    } else if (currentVolume < lastSystemVolume) {
+        NSLog(@"Volume down button pressed, sending volumedownbutton event");
+        [self sendEvent:@"volumedownbutton" args:@[]];
+        
+        // Optional: automatically adjust Chromecast volume
+        if (self.currentSession != nil && self.currentSession.sessionManager.currentCastSession != nil) {
+            float castVolume = self.currentSession.sessionManager.currentCastSession.currentDeviceVolume;
+            [self.currentSession setReceiverVolumeLevelWithCommand:nil newLevel:MAX(0.0, castVolume - 0.05)];
+        }
+    }
+    
+    // Update for next time
+    lastSystemVolume = currentVolume;
+}
+
+// Override canBecomeFirstResponder to receive remote control events
+- (BOOL)canBecomeFirstResponder {
+    return YES;
+}
+
+// Handle remote control events (alternative method to capture volume buttons)
+- (void)remoteControlReceivedWithEvent:(UIEvent *)event {
+    if (event.type == UIEventTypeRemoteControl) {
+        if (event.subtype == UIEventSubtypeRemoteControlBeginSeekingBackward) {
+            [self sendEvent:@"volumedownbutton" args:@[]];
+        } else if (event.subtype == UIEventSubtypeRemoteControlBeginSeekingForward) {
+            [self sendEvent:@"volumeupbutton" args:@[]];
+        }
+    }
 }
 
 - (void)setup:(CDVInvokedUrlCommand*) command {

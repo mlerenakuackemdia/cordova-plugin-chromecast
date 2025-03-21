@@ -40,6 +40,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)selectRoute:(CDVInvokedUrlCommand*)command;
 - (void)sendEvent:(NSString*)eventName args:(NSArray*)args;
 - (void)queueJumpToItem:(CDVInvokedUrlCommand *)command;
+- (BOOL)canBecomeFirstResponder;
+- (void)remoteControlReceivedWithEvent:(UIEvent *)event;
+- (void)volumeChanged:(NSNotification *)notification;
 @end
 
 NS_ASSUME_NONNULL_END

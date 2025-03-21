@@ -1550,3 +1550,17 @@ function handleError (err, callback) {
         callback(error);
     }
 }
+// Add volume button event listeners
+document.addEventListener('volumeupbutton', function() {
+    console.log('Volume up button pressed in Chromecast plugin');
+    // Dispatch a new custom event for apps to listen to
+    var evt = new CustomEvent('chromecast.volumeupbutton');
+    document.dispatchEvent(evt);
+}, false);
+
+document.addEventListener('volumedownbutton', function() {
+    console.log('Volume down button pressed in Chromecast plugin');
+    // Dispatch a new custom event for apps to listen to
+    var evt = new CustomEvent('chromecast.volumedownbutton');
+    document.dispatchEvent(evt);
+}, false);
