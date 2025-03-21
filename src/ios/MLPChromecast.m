@@ -4,6 +4,69 @@
 
 #import "MLPChromecast.h"
 #import "MLPCastUtilities.h"
+#import "AVAudioSession/AVAudioSession+Extensions.h"
+
+// Implementation of VolumeButtonHandler
+@implementation VolumeButtonHandler {
+    __weak MLPChromecast *_chromecast;
+    MPVolumeView *_volumeView;
+}
+
+- (instancetype)initWithChromecast:(MLPChromecast *)chromecast {
+    self = [super initWithFrame:CGRectMake(0, 0, 1, 1)];
+    if (self) {
+        _chromecast = chromecast;
+        self.hidden = YES;
+        
+        // Create MPVolumeView to intercept volume button events
+        _volumeView = [[MPVolumeView alloc] initWithFrame:CGRectMake(0, 0, 1, 1)];
+        _volumeView.hidden = YES;
+        [self addSubview:_volumeView];
+        
+        // Start receiving remote control events
+        [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
+        [self becomeFirstResponder];
+        
+        // Setup notification to detect volume changes
+        [[NSNotificationCenter defaultCenter] addObserver:self 
+                                                selector:@selector(volumeChanged:) 
+                                                    name:@"AVSystemController_SystemVolumeDidChangeNotification" 
+                                                  object:nil];
+    }
+    return self;
+}
+
+- (BOOL)canBecomeFirstResponder {
+    return YES;
+}
+
+- (void)volumeChanged:(NSNotification *)notification {
+    // Get the volume change
+    float newVolume = [[[notification userInfo] objectForKey:@"AVSystemController_AudioVolumeNotificationParameter"] floatValue];
+    
+    // Create a fake event to pass to the Chromecast plugin
+    // We don't need to detect up/down since MLPChromecast will do that
+    if (_chromecast) {
+        [_chromecast volumeChanged:notification];
+    }
+}
+
+- (void)remoteControlReceivedWithEvent:(UIEvent *)event {
+    if (event.type == UIEventTypeRemoteControl) {
+        if (event.subtype == UIEventSubtypeRemoteControlBeginSeekingBackward) {
+            [_chromecast sendEvent:@"volumedownbutton" args:@[]];
+        } else if (event.subtype == UIEventSubtypeRemoteControlBeginSeekingForward) {
+            [_chromecast sendEvent:@"volumeupbutton" args:@[]];
+        }
+    }
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [[UIApplication sharedApplication] endReceivingRemoteControlEvents];
+}
+
+@end
 
 #define IDIOM    UI_USER_INTERFACE_IDIOM()
 #define IPAD     UIUserInterfaceIdiomPad
@@ -29,11 +92,18 @@ int scansRunning = 0;
     }
     [self setAppId:applicationId];
     
-    // Register for volume changed notifications
-    [[NSNotificationCenter defaultCenter] addObserver:self 
-                                             selector:@selector(volumeChanged:) 
-                                                 name:@"AVSystemController_SystemVolumeDidChangeNotification" 
-                                               object:nil];
+    // Register for volume changed notifications and make sure our plugin can handle application events
+    // Use our AVAudioSession extension to properly register for volume events
+    [AVAudioSession registerForVolumeNotifications:self selector:@selector(volumeChanged:)];
+    
+    // Ensure we're able to receive remote control events
+    [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
+    
+    // Directly add our custom event handling to the app's main window
+    UIWindow *window = [UIApplication sharedApplication].keyWindow;
+    if (window) {
+        [window addSubview:[[VolumeButtonHandler alloc] initWithChromecast:self]];
+    }
 }
 
 - (void)setAppId:(NSString*)applicationId {
@@ -105,6 +175,8 @@ static float lastSystemVolume = -1;
     if (currentVolume > lastSystemVolume) {
         NSLog(@"Volume up button pressed, sending volumeupbutton event");
         [self sendEvent:@"volumeupbutton" args:@[]];
+        // Also fire Cordova event directly for better compatibility
+        [self sendVolumeButtonEvent:@"volumeupbutton"];
         
         // Optional: automatically adjust Chromecast volume
         if (self.currentSession != nil && self.currentSession.sessionManager.currentCastSession != nil) {
@@ -114,6 +186,8 @@ static float lastSystemVolume = -1;
     } else if (currentVolume < lastSystemVolume) {
         NSLog(@"Volume down button pressed, sending volumedownbutton event");
         [self sendEvent:@"volumedownbutton" args:@[]];
+        // Also fire Cordova event directly for better compatibility
+        [self sendVolumeButtonEvent:@"volumedownbutton"];
         
         // Optional: automatically adjust Chromecast volume
         if (self.currentSession != nil && self.currentSession.sessionManager.currentCastSession != nil) {
@@ -138,6 +212,20 @@ static float lastSystemVolume = -1;
             [self sendEvent:@"volumedownbutton" args:@[]];
         } else if (event.subtype == UIEventSubtypeRemoteControlBeginSeekingForward) {
             [self sendEvent:@"volumeupbutton" args:@[]];
+        }
+    }
+}
+
+// We need to send these events to Cordova directly for better compatibility
+- (void)sendVolumeButtonEvent:(NSString *)eventName {
+    if (self.webView) {
+        NSString *js = [NSString stringWithFormat:@"cordova.fireDocumentEvent('%@');", eventName];
+        if ([self.webView respondsToSelector:@selector(stringByEvaluatingJavaScriptFromString:)]) {
+            [(UIWebView *)self.webView stringByEvaluatingJavaScriptFromString:js];
+        } else {
+            [self.webView performSelectorOnMainThread:@selector(evaluateJavaScript:completionHandler:)
+                                          withObject:js
+                                       waitUntilDone:NO];
         }
     }
 }

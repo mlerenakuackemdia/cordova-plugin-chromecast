@@ -5,8 +5,17 @@
 #import <Foundation/Foundation.h>
 #import <GoogleCast/GoogleCast.h>
 #import <Cordova/CDV.h>
+#import <MediaPlayer/MediaPlayer.h>
+#import <AVFoundation/AVFoundation.h>
 #import "MLPChromecastSession.h"
 #import "MLPCastUtilities.h"
+
+// Helper class to handle volume button events
+@interface VolumeButtonHandler : UIView
+
+- (instancetype)initWithChromecast:(id)chromecast;
+
+@end
 
 NS_ASSUME_NONNULL_BEGIN
 
