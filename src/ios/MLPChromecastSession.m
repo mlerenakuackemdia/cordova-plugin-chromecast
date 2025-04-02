@@ -7,7 +7,6 @@
 
 @implementation MLPChromecastSession
 GCKCastSession* currentSession;
-CDVInvokedUrlCommand* joinSessionCommand;
 NSDictionary* lastMedia = nil;
 void (^loadMediaCallback)(NSString*) = nil;
 BOOL isResumingSession = NO;
@@ -21,6 +20,7 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
     self = [super init];
     requestDelegates = [NSMutableArray new];
     endSessionCallbacks = [NSMutableArray new];
+    self.genericChannels = [NSMutableDictionary new];
     self.sessionListener = listener;
     self.commandDelegate = cordovaDelegate;
     self.castContext = [GCKCastContext sharedInstance];
@@ -97,12 +97,12 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
 
 - (void)joinDevice:(GCKDevice*)device cdvCommand:(CDVInvokedUrlCommand*)command {
     // Verificar que no tengamos otra sesión pendiente
-    if (joinSessionCommand != nil) {
+    if (self.joinSessionCommand != nil) {
         NSLog(@"Warning: Overriding previous joinSessionCommand that was never completed");
         // Responder a la solicitud anterior para no dejarla pendiente
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
                                         messageAsString:@"Session join was interrupted by a new request"];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:joinSessionCommand.callbackId];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:self.joinSessionCommand.callbackId];
     }
     
     // Comprobar si hay una sesión activa y terminarla antes de iniciar una nueva
@@ -122,8 +122,8 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
     }
 }
 
-- (void)initiateJoinWithDevice:(GCKDevice*)device cdvCommand:(CDVInvokedUrlCommand*)command {
-    joinSessionCommand = command;
+- (void)initiateJoinWithDevice:(GCKDevice*)device command:(CDVInvokedUrlCommand*)command {
+    self.joinSessionCommand = command;
     NSLog(@"Starting session with device: %@", device.friendlyName);
     
     // Establecer un timeout para la conexión de sesión
@@ -145,7 +145,7 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
     BOOL startedSuccessfully = [self.sessionManager startSessionWithDevice:device];
     if (!startedSuccessfully) {
         // Ocurrió un error inmediato, limpiar el comando pendiente
-        joinSessionCommand = nil;
+        self.joinSessionCommand = nil;
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
                                         messageAsString:@"Failed to join the selected route"];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
@@ -507,10 +507,10 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
     [self setSession:session];
     self.remoteMediaClient = session.remoteMediaClient;
     [self.remoteMediaClient addListener:self];
-    if (joinSessionCommand != nil) {
+    if (self.joinSessionCommand != nil) {
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary: [MLPCastUtilities createSessionObject:session] ];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:joinSessionCommand.callbackId];
-        joinSessionCommand = nil;
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:self.joinSessionCommand.callbackId];
+        self.joinSessionCommand = nil;
     }
 }
 
@@ -519,10 +519,10 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
     currentSession = nil;
     
     // Did we fail on a join session command?
-    if (error != nil && joinSessionCommand != nil) {
+    if (error != nil && self.joinSessionCommand != nil) {
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:error.debugDescription];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:joinSessionCommand.callbackId];
-        joinSessionCommand = nil;
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:self.joinSessionCommand.callbackId];
+        self.joinSessionCommand = nil;
         return;
     }
     
