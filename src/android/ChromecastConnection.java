@@ -299,11 +299,12 @@ public class ChromecastConnection {
                     }
                 });
 
-                startRouteScan(15000L, scan, new Runnable() {
+                startRouteScan(25000L, scan, new Runnable() {
                     @Override
                     public void run() {
                         sendErrorResult.apply(ChromecastUtilities.createError("timeout",
-                                "Failed to join route (" + routeId + ") after 15s and " + (retries[0] + 1) + " tries."));
+                                "Failed to join route (" + routeId + ") after 25s and " + (retries[0] + 1) + " tries
+                                ."));
                     }
                 });
             }
