@@ -303,8 +303,7 @@ public class ChromecastConnection {
                     @Override
                     public void run() {
                         sendErrorResult.apply(ChromecastUtilities.createError("timeout",
-                                "Failed to join route (" + routeId + ") after 25s and " + (retries[0] + 1) + " tries
-                                ."));
+                                "Failed to join route (" + routeId + ") after 25s and " + (retries[0] + 1) + " trie."));
                     }
                 });
             }
