@@ -75,8 +75,53 @@ int scansRunning = 0;
     [self sendEvent:@"SETUP" args:@[]];
 }
 
+- (void)resetPlugin {
+    NSLog(@"Reseteando estado del plugin Chromecast");
+    
+    // Limpiar estado de escaneo
+    [self stopRouteScan];
+    scansRunning = 0;
+    scanCommand = nil;
+    
+    // Cerrar cualquier sesión existente
+    GCKSessionManager *sessionManager = [GCKCastContext sharedInstance].sessionManager;
+    GCKSession *currentSession = sessionManager.currentSession;
+    if (currentSession != nil) {
+        // Intenta cerrar la sesión de forma limpia
+        [currentSession endWithAction:GCKSessionEndActionLeave];
+    }
+    
+    // Reiniciar el descubrimiento para tener un estado limpio
+    [[GCKCastContext sharedInstance].discoveryManager stopDiscovery];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [[GCKCastContext sharedInstance].discoveryManager startDiscovery];
+    });
+    
+    // Reiniciar la sesión actual
+    self.currentSession = [self.currentSession initWithListener:self cordovaDelegate:self.commandDelegate];
+}
+
+- (void)forceReset:(CDVInvokedUrlCommand*)command {
+    [self resetPlugin];
+    
+    // Informar al usuario que el reset se completó
+    CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK 
+                                    messageAsString:@"Plugin reset completed successfully"];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+}
+
 -(void) initialize:(CDVInvokedUrlCommand*)command {
     NSString* applicationId = command.arguments[0];
+    
+    // Si existe un parámetro adicional para forzar reset, hacerlo primero
+    BOOL forceReset = NO;
+    if (command.arguments.count > 1 && command.arguments[1] != [NSNull null]) {
+        forceReset = [command.arguments[1] boolValue];
+    }
+    
+    if (forceReset) {
+        [self resetPlugin];
+    }
 
     // If the app id is invalid just send success and return
     if (![self isValidAppId:applicationId]) {
@@ -98,6 +143,28 @@ int scansRunning = 0;
         
         // Add a brief delay before attempting to rejoin to allow discovery to find devices
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            // Verificar si hay una sesión actual en el SessionManager
+            GCKCastSession* castSession = [GCKCastContext sharedInstance].sessionManager.currentCastSession;
+            if (castSession != nil) {
+                // Verificar si el dispositivo de la sesión sigue disponible
+                BOOL deviceAvailable = NO;
+                GCKDiscoveryManager* discoveryManager = [GCKCastContext sharedInstance].discoveryManager;
+                NSString* deviceId = castSession.device.deviceID;
+                
+                for (int i = 0; i < [discoveryManager deviceCount]; i++) {
+                    GCKDevice* device = [discoveryManager deviceAtIndex:i];
+                    if ([device.deviceID isEqualToString:deviceId]) {
+                        deviceAvailable = YES;
+                        break;
+                    }
+                }
+                
+                if (!deviceAvailable) {
+                    NSLog(@"Session device not found during initialize, ending invalid session");
+                    [castSession endWithAction:GCKSessionEndActionLeave];
+                }
+            }
+            
             NSLog(@"Attempting to rejoin existing session");
             [self.currentSession tryRejoin];
         });
@@ -435,8 +502,40 @@ int scansRunning = 0;
 
 - (void)selectRoute:(CDVInvokedUrlCommand*)command {
     GCKCastSession* currentSession = [GCKCastContext sharedInstance].sessionManager.currentCastSession;
-    if (currentSession != nil &&
-        (currentSession.connectionState == GCKConnectionStateConnected || currentSession.connectionState == GCKConnectionStateConnecting)) {
+    
+    // Verificación adicional para determinar si la sesión está realmente activa
+    BOOL isSessionValid = NO;
+    if (currentSession != nil) {
+        // Verifica que la sesión está realmente conectada y que el dispositivo exista en discovery
+        if (currentSession.connectionState == GCKConnectionStateConnected || 
+            currentSession.connectionState == GCKConnectionStateConnecting) {
+            
+            // Verificar si el dispositivo de la sesión actual está disponible en discovery
+            GCKDiscoveryManager* discoveryManager = GCKCastContext.sharedInstance.discoveryManager;
+            NSString* deviceId = currentSession.device.deviceID;
+            BOOL deviceFound = NO;
+            
+            for (int i = 0; i < [discoveryManager deviceCount]; i++) {
+                GCKDevice* device = [discoveryManager deviceAtIndex:i];
+                if ([device.deviceID isEqualToString:deviceId]) {
+                    deviceFound = YES;
+                    break;
+                }
+            }
+            
+            // Solo consideramos la sesión válida si el dispositivo todavía está disponible
+            isSessionValid = deviceFound;
+            
+            // Si el dispositivo no está disponible, terminamos la sesión automáticamente
+            if (!deviceFound && currentSession.connectionState == GCKConnectionStateConnected) {
+                NSLog(@"Device from current session not found, automatically ending invalid session");
+                [currentSession endWithAction:GCKSessionEndActionLeave];
+                isSessionValid = NO;
+            }
+        }
+    }
+    
+    if (isSessionValid) {
         [self sendError:@"session_error" message:@"Leave or stop current session before attempting to join new session." command:command];
         return;
     }

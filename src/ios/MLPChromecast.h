@@ -40,6 +40,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)selectRoute:(CDVInvokedUrlCommand*)command;
 - (void)sendEvent:(NSString*)eventName args:(NSArray*)args;
 - (void)queueJumpToItem:(CDVInvokedUrlCommand *)command;
+- (void)resetPlugin;
+- (void)forceReset:(CDVInvokedUrlCommand*)command;
 @end
 
 NS_ASSUME_NONNULL_END

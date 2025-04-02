@@ -1505,6 +1505,29 @@ function createNewSession (javaSession) {
     return _session;
 }
 
+/**
+ * Resetea completamente el estado del plugin cuando queda bloqueado
+ * @param {function} successCallback Función a llamar si el reset es exitoso
+ * @param {function} errorCallback Función a llamar si hay un error durante el reset
+ */
+chrome.cast.forceReset = function(successCallback, errorCallback) {
+    execute('forceReset', function(err, result) {
+        if (!err) {
+            // Reiniciamos también las variables locales del plugin
+            _session = undefined;
+            _sessionListener = undefined;
+            _receiverListener = undefined;
+            _initialized = false;
+            
+            // Llamamos al callback de éxito
+            successCallback && successCallback(result);
+        } else {
+            // Llamamos al callback de error
+            handleError(err, errorCallback);
+        }
+    });
+};
+
 function execute (action) {
     var args = [].slice.call(arguments);
     args.shift();
@@ -1514,10 +1537,10 @@ function execute (action) {
     }
 
     // Reasons to not execute
-    if (action !== 'setup' && !chrome.cast.isAvailable) {
+    if (action !== 'setup' && action !== 'forceReset' && !chrome.cast.isAvailable) {
         return callback && callback(new chrome.cast.Error(chrome.cast.ErrorCode.API_NOT_INITIALIZED), 'The API is not initialized.', {});
     }
-    if (action !== 'setup' && action !== 'initialize' && !_initialized) {
+    if (action !== 'setup' && action !== 'initialize' && action !== 'forceReset' && !_initialized) {
         throw new Error('Not initialized. Must call chrome.cast.initialize first.');
     }
 

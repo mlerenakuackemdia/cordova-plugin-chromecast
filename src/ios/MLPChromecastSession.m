@@ -96,10 +96,58 @@ NSMutableArray<MLPCastRequestDelegate*>* requestDelegates;
 }
 
 - (void)joinDevice:(GCKDevice*)device cdvCommand:(CDVInvokedUrlCommand*)command {
+    // Verificar que no tengamos otra sesión pendiente
+    if (joinSessionCommand != nil) {
+        NSLog(@"Warning: Overriding previous joinSessionCommand that was never completed");
+        // Responder a la solicitud anterior para no dejarla pendiente
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                        messageAsString:@"Session join was interrupted by a new request"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:joinSessionCommand.callbackId];
+    }
+    
+    // Comprobar si hay una sesión activa y terminarla antes de iniciar una nueva
+    GCKCastSession* existingSession = self.sessionManager.currentCastSession;
+    if (existingSession != nil) {
+        NSLog(@"Cleaning up existing session before starting a new one");
+        // Abandonar la sesión actual para evitar conflictos
+        [existingSession endWithAction:GCKSessionEndActionLeave];
+        
+        // Dar tiempo a que se limpie la sesión antes de iniciar la nueva
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self initiateJoinWithDevice:device command:command];
+        });
+    } else {
+        // No hay sesión previa, podemos continuar normalmente
+        [self initiateJoinWithDevice:device command:command];
+    }
+}
+
+- (void)initiateJoinWithDevice:(GCKDevice*)device cdvCommand:(CDVInvokedUrlCommand*)command {
     joinSessionCommand = command;
+    NSLog(@"Starting session with device: %@", device.friendlyName);
+    
+    // Establecer un timeout para la conexión de sesión
+    __weak MLPChromecastSession* weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        // Comprobar si aún tenemos el comando pendiente
+        if (weakSelf.joinSessionCommand == command) {
+            NSLog(@"Session join timed out after 15 seconds");
+            // Limpiar el comando pendiente
+            weakSelf.joinSessionCommand = nil;
+            
+            // Notificar al usuario
+            CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                            messageAsString:@"Session join timed out"];
+            [weakSelf.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        }
+    });
+    
     BOOL startedSuccessfully = [self.sessionManager startSessionWithDevice:device];
     if (!startedSuccessfully) {
-        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Failed to join the selected route"];
+        // Ocurrió un error inmediato, limpiar el comando pendiente
+        joinSessionCommand = nil;
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR 
+                                        messageAsString:@"Failed to join the selected route"];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
     }
 }
